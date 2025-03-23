@@ -31,11 +31,14 @@ impl Config {
     /// Create a config structure from the current configuration of the WDT
     /// peripheral.
     pub fn try_new(_wdt: &peripherals::WDT) -> Option<Self> {
+        #[cfg(not(feature = "nrf5340-app-s"))]
         let r = crate::pac::WDT;
+        #[cfg(feature = "nrf5340-app-s")]
+        let r = crate::pac::WDT0;
 
-        #[cfg(not(feature = "_nrf91"))]
+        #[cfg(all(not(feature = "_nrf91"), not(feature = "nrf5340-app-s")))]
         let runstatus = r.runstatus().read().runstatus();
-        #[cfg(feature = "_nrf91")]
+        #[cfg(any(feature = "_nrf91", feature = "nrf5340-app-s"))]
         let runstatus = r.runstatus().read().runstatuswdt();
 
         if runstatus {
@@ -81,14 +84,17 @@ impl Watchdog {
     ) -> Result<(Self, [WatchdogHandle; N]), Peri<'static, peripherals::WDT>> {
         assert!(N >= 1 && N <= 8);
 
+        #[cfg(not(feature = "nrf5340-app-s"))]
         let r = crate::pac::WDT;
+        #[cfg(feature = "nrf5340-app-s")]
+        let r = crate::pac::WDT0;
 
         let crv = config.timeout_ticks.max(MIN_TICKS);
         let rren = crate::pac::wdt::regs::Rren((1u32 << N) - 1);
 
-        #[cfg(not(feature = "_nrf91"))]
+        #[cfg(all(not(feature = "_nrf91"), not(feature = "nrf5340-app-s")))]
         let runstatus = r.runstatus().read().runstatus();
-        #[cfg(feature = "_nrf91")]
+        #[cfg(any(feature = "_nrf91", feature = "nrf5340-app-s"))]
         let runstatus = r.runstatus().read().runstatuswdt();
 
         if runstatus {
@@ -139,7 +145,10 @@ impl Watchdog {
     /// interrupt has been enabled.
     #[inline(always)]
     pub fn enable_interrupt(&mut self) {
+        #[cfg(not(feature = "nrf5340-app-s"))]
         crate::pac::WDT.intenset().write(|w| w.set_timeout(true));
+        #[cfg(feature = "nrf5340-app-s")]
+        crate::pac::WDT0.intenset().write(|w| w.set_timeout(true));
     }
 
     /// Disable the watchdog interrupt.
@@ -147,7 +156,10 @@ impl Watchdog {
     /// NOTE: This has no effect on the reset caused by the Watchdog.
     #[inline(always)]
     pub fn disable_interrupt(&mut self) {
+        #[cfg(not(feature = "nrf5340-app-s"))]
         crate::pac::WDT.intenclr().write(|w| w.set_timeout(true));
+        #[cfg(feature = "nrf5340-app-s")]
+        crate::pac::WDT0.intenclr().write(|w| w.set_timeout(true));
     }
 
     /// Is the watchdog still awaiting pets from any handle?
@@ -156,7 +168,10 @@ impl Watchdog {
     /// handles to prevent a reset this time period.
     #[inline(always)]
     pub fn awaiting_pets(&self) -> bool {
+        #[cfg(not(feature = "nrf5340-app-s"))]
         let r = crate::pac::WDT;
+        #[cfg(feature = "nrf5340-app-s")]
+        let r = crate::pac::WDT0;
         let enabled = r.rren().read().0;
         let status = r.reqstatus().read().0;
         (status & enabled) == 0
@@ -178,13 +193,19 @@ impl WatchdogHandle {
     /// prevent a reset from occurring.
     #[inline]
     pub fn pet(&mut self) {
+        #[cfg(not(feature = "nrf5340-app-s"))]
         let r = crate::pac::WDT;
+        #[cfg(feature = "nrf5340-app-s")]
+        let r = crate::pac::WDT0;
         r.rr(self.index as usize).write(|w| w.set_rr(vals::Rr::RELOAD));
     }
 
     /// Has this handle been pet within the current window?
     pub fn is_pet(&self) -> bool {
+        #[cfg(not(feature = "nrf5340-app-s"))]
         let r = crate::pac::WDT;
+        #[cfg(feature = "nrf5340-app-s")]
+        let r = crate::pac::WDT0;
         !r.reqstatus().read().rr(self.index as usize)
     }
 
