@@ -73,6 +73,10 @@ impl<'d, STATE: NorFlash, RST: Reset> Handler for Control<'d, STATE, RST> {
                 self.detach_start = Some(Instant::now());
                 self.timeout = Some(Duration::from_millis(req.value as u64));
                 self.state = State::AppDetach;
+
+                // USB Device Firmware Upgrade Specification Revision 1.1 attribute bitWillDetach by default, todo allow configuration
+                self.reset();
+
                 Some(OutResponse::Accepted)
             }
             _ => None,
