@@ -359,8 +359,10 @@ pub(crate) struct PortInputFuture<'a> {
 
 impl<'a> PortInputFuture<'a> {
     fn new(pin: impl Peripheral<P = impl GpioPin> + 'a, sense: Sense) -> Self {
+        let pin = pin.into_ref().map_into();
+        pin.conf().modify(|w| w.set_sense(sense));
         Self {
-            pin: pin.into_ref().map_into(),
+            pin,
             sense,
         }
     }
