@@ -2,6 +2,7 @@
 
 use core::convert::Infallible;
 use core::future::{poll_fn, Future};
+use core::sync::atomic::{compiler_fence, Ordering};
 use core::task::{Context, Poll};
 
 use embassy_hal_internal::{impl_peripheral, into_ref, Peripheral, PeripheralRef};
@@ -236,12 +237,13 @@ impl<'d> InputChannel<'d> {
         let g = regs();
         let num = self.ch.number();
 
-        // Enable interrupt
-        g.events_in(num).write_value(0);
-        g.intenset().write(|w| w.0 = 1 << num);
-
         poll_fn(|cx| {
+            compiler_fence(Ordering::SeqCst);
             CHANNEL_WAKERS[num].register(cx.waker());
+
+            // Enable interrupt
+            g.events_in(num).write_value(0);
+            g.intenset().write(|w| w.0 = 1 << num);
 
             if g.events_in(num).read() != 0 {
                 Poll::Ready(())
@@ -352,12 +354,14 @@ impl<'d> OutputChannel<'d> {
 #[must_use = "futures do nothing unless you `.await` or poll them"]
 pub(crate) struct PortInputFuture<'a> {
     pin: PeripheralRef<'a, AnyPin>,
+    sense: Sense,
 }
 
 impl<'a> PortInputFuture<'a> {
-    fn new(pin: impl Peripheral<P = impl GpioPin> + 'a) -> Self {
+    fn new(pin: impl Peripheral<P = impl GpioPin> + 'a, sense: Sense) -> Self {
         Self {
             pin: pin.into_ref().map_into(),
+            sense,
         }
     }
 }
@@ -375,10 +379,12 @@ impl<'a> Future for PortInputFuture<'a> {
 
     fn poll(self: core::pin::Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         PORT_WAKERS[self.pin.pin_port() as usize].register(cx.waker());
+        compiler_fence(Ordering::SeqCst);
 
-        if self.pin.conf().read().sense() == Sense::DISABLED {
+        return if self.pin.conf().read().sense() == Sense::DISABLED {
             Poll::Ready(())
         } else {
+            self.pin.conf().modify(|w| w.set_sense(self.sense));
             Poll::Pending
         }
     }
@@ -414,36 +420,41 @@ impl<'d> Input<'d> {
 impl<'d> Flex<'d> {
     /// Wait until the pin is high. If it is already high, return immediately.
     pub async fn wait_for_high(&mut self) {
-        self.pin.conf().modify(|w| w.set_sense(Sense::HIGH));
-        PortInputFuture::new(&mut self.pin).await
+        if !self.is_high() {
+            PortInputFuture::new(&mut self.pin, Sense::HIGH).await
+        }
     }
 
     /// Wait until the pin is low. If it is already low, return immediately.
     pub async fn wait_for_low(&mut self) {
-        self.pin.conf().modify(|w| w.set_sense(Sense::LOW));
-        PortInputFuture::new(&mut self.pin).await
+        if !self.is_low() {
+            PortInputFuture::new(&mut self.pin, Sense::LOW).await
+        }
     }
 
     /// Wait for the pin to undergo a transition from low to high.
     pub async fn wait_for_rising_edge(&mut self) {
-        self.wait_for_low().await;
+        if !self.is_low() {
+            self.wait_for_low().await;
+        }
         self.wait_for_high().await;
     }
 
     /// Wait for the pin to undergo a transition from high to low.
     pub async fn wait_for_falling_edge(&mut self) {
-        self.wait_for_high().await;
+        if !self.is_high() {
+            self.wait_for_high().await;
+        }
         self.wait_for_low().await;
     }
 
     /// Wait for the pin to undergo any transition, i.e low to high OR high to low.
     pub async fn wait_for_any_edge(&mut self) {
         if self.is_high() {
-            self.pin.conf().modify(|w| w.set_sense(Sense::LOW));
+            PortInputFuture::new(&mut self.pin, Sense::LOW).await
         } else {
-            self.pin.conf().modify(|w| w.set_sense(Sense::HIGH));
+            PortInputFuture::new(&mut self.pin, Sense::HIGH).await
         }
-        PortInputFuture::new(&mut self.pin).await
     }
 }
 
