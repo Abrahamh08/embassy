@@ -185,7 +185,7 @@ pub mod wdt;
 #[cfg_attr(feature = "_nrf54l15-app", path = "chips/nrf54l15_app.rs")]
 #[cfg_attr(feature = "_nrf9160", path = "chips/nrf9160.rs")]
 #[cfg_attr(feature = "_nrf9120", path = "chips/nrf9120.rs")]
-mod chip;
+pub mod chip;
 
 /// Macro to bind interrupts to handlers.
 ///
