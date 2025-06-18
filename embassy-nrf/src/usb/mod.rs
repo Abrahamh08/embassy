@@ -120,6 +120,7 @@ impl<'d, V: VbusDetect + 'd> driver::Driver<'d> for Driver<'d, V> {
     type ControlPipe = ControlPipe<'d>;
     type Bus = Bus<'d, V>;
 
+    const SUPPORTS_HS: bool = false;
     fn alloc_endpoint_in(
         &mut self,
         ep_type: EndpointType,

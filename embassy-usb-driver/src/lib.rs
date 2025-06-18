@@ -123,6 +123,8 @@ pub trait Driver<'a> {
     type ControlPipe: ControlPipe + 'a;
     /// Type for bus control for this driver.
     type Bus: Bus + 'a;
+    /// Define whether the hardware supports high speed
+    const SUPPORTS_HS: bool;
 
     /// Allocates an OUT endpoint.
     ///

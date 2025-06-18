@@ -768,7 +768,9 @@ impl<'d, D: Driver<'d>> Inner<'d, D> {
                     }
                 }
             }
-            descriptor_type::DEVICE_QUALIFIER => InResponse::Accepted(&self.device_qualifier_descriptor),
+            descriptor_type::DEVICE_QUALIFIER if D::SUPPORTS_HS => {
+                InResponse::Accepted(&self.device_qualifier_descriptor)
+            }
             _ => InResponse::Rejected,
         }
     }
