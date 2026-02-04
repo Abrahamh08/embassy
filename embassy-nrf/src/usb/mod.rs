@@ -291,6 +291,7 @@ impl<'d, V: VbusDetect> driver::Bus for Bus<'d, V> {
     }
 
     fn endpoint_set_stalled(&mut self, ep_addr: EndpointAddress, stalled: bool) {
+        trace!("endpoint_set_stalled ep={:?} en={}", ep_addr, stalled);
         let regs = self.regs;
         if ep_addr.index() == 0 {
             if stalled {
